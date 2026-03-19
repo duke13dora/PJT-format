@@ -60,6 +60,10 @@ mklink /J "c:\PJT-{CODE}\drive" "H:\マイドライブ\{ショートカット名
 
 **対策**: drive/ は `.gitignore` に追加すること。
 
+### バックアップについて
+
+Google Drive管理下のファイルは**手動バックアップ不要**。Google Driveのバージョン履歴で復元可能。ローカル専用ファイル（`c:\PJT-{CODE}\` 直下のxlsx/docx/pptx等）のみ `backup/` フォルダにバックアップを取ること。
+
 ### .gitignore の設定
 
 ```

@@ -15,6 +15,13 @@
       "env": {
         "NOTION_TOKEN": "{YOUR_NOTION_TOKEN}"
       }
+    },
+    "asana": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@roychri/mcp-server-asana"],
+      "env": {
+        "ASANA_ACCESS_TOKEN": "{YOUR_ASANA_ACCESS_TOKEN}"
+      }
     }
   }
 }

@@ -71,6 +71,62 @@ fs.writeFileSync('output.docx', buf);
 - 出席者セクション等、従来書いていないセクションを勝手に追加しない
 - タイトル形式: `YYMMDD_{会議名}`（余計な文言は付けない）
 
+### 改ページの挿入
+
+会議エントリの区切り等に改ページを入れる場合:
+```xml
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+```
+見出し（Heading1等）の直前に挿入する。
+
+### ハイパーリンクの追加
+
+1. `word/_rels/document.xml.rels` にRelationshipを追加:
+```xml
+<Relationship Id="rIdXX" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+  Target="https://..." TargetMode="External"/>
+```
+
+2. 本文XMLでハイパーリンクを参照:
+```xml
+<w:hyperlink r:id="rIdXX">
+  <w:r>
+    <w:rPr>
+      <w:color w:val="0000FF"/>
+      <w:u w:val="single"/>
+    </w:rPr>
+    <w:t>リンクテキスト</w:t>
+  </w:r>
+</w:hyperlink>
+```
+
+### 色の明示指定
+
+`<w:color w:val="000000"/>` を付けないと、スタイル定義のデフォルト色に依存する。意図しない色（灰色等）になる場合があるため、黒色テキストには明示的に `w:val="000000"` を指定すること。
+
+### フリガナ（rPh）の処理
+
+docx内のセルやテキストにフリガナ情報（`<w:rPh>` 要素）が含まれている場合がある。
+
+- **テキスト抽出時**: `<w:rPh>...</w:rPh>` を除去してからテキストを取得すること（フリガナがテキストに混入する）
+- **新規段落作成時**: rPh要素は不要（付けなくてよい）
+
+### 先頭挿入の注意
+
+議事メモ等の時系列ドキュメントでは、新しいエントリは先頭に挿入（最新が上、最古が下）。`<w:body>`直後の最初の段落の前に新しいXMLを挿入する。
+
+### 箇条書きレベルの構成例
+
+議事メモ等で使用する箇条書きレベルの例:
+```
+ilvl=0: ● 大見出し（numId参照）
+ilvl=1: ○ 中見出し
+ilvl=2: ■ 詳細
+ilvl=3: ● サブ詳細
+```
+
+`w:numPr` の `w:ilvl` と `w:numId` でレベルとリストIDを指定。新しいリストを追加する場合は既存のnumIdを再利用するのが安全。
+
 ### docx内のXMLファイル構成
 
 ```

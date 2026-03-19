@@ -59,6 +59,12 @@
 <!-- チケット運用ルール、ID一覧等 -->
 → 詳細は [detailed-operations.md](detailed-operations.md) に記載
 
+## バックアップ運用
+- **バックアップ先**: `{PJ_ROOT}\backup\` フォルダ
+- 編集前バックアップは `backup/` フォルダ内に保存する（プロジェクトルート直下に置かない）
+- 命名: `元ファイル名_backup_YYMMDD.xlsx` or `_backup_pre〇〇.xlsx`
+- `_tmp` ファイルも作業完了後に `backup/` へ移動
+
 ## 定例後ワークフロー
 <!-- スコープ・手順。誰が何を担当するか -->
 
