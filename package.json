@@ -1,0 +1,23 @@
+{
+  "name": "pj-format",
+  "version": "1.0.0",
+  "description": "プロジェクト運営テンプレート",
+  "type": "commonjs",
+  "scripts": {
+    "convert": "node scripts/convert-to-text.mjs",
+    "schedule": "node scripts/create-schedule-pptx.mjs",
+    "kickoff-notion": "node scripts/create-kickoff-notion.mjs"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "pdf-parse": "^1.1.1",
+    "pptxgenjs": "^3.12.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {},
+  "private": true,
+  "license": "UNLICENSED",
+  "_NOTE": "ExcelJS/xlsxは読み取り専用。Excel書き込みにはadm-zip XML直接編集を使用すること（guides/02-excel-editing.md参照）"
+}

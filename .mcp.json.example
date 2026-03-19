@@ -1,0 +1,20 @@
+{
+  "_NOTE": "このファイルを .mcp.json にリネームしてトークンを設定する。詳細: guides/05-mcp-setup.md",
+  "mcpServers": {
+    "backlog": {
+      "command": "node",
+      "args": ["C:/Users/{USER}/AppData/Roaming/npm/node_modules/backlog-mcp-server/build/index.js"],
+      "env": {
+        "BACKLOG_API_KEY": "{YOUR_BACKLOG_API_KEY}",
+        "BACKLOG_DOMAIN": "{SPACE}.backlog.com"
+      }
+    },
+    "notion": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "NOTION_TOKEN": "{YOUR_NOTION_TOKEN}"
+      }
+    }
+  }
+}

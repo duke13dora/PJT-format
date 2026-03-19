@@ -1,0 +1,20 @@
+# Google Drive junction
+drive/
+
+# MCP config (contains tokens)
+.mcp.json
+
+# Dependencies
+node_modules/
+
+# Office files (binary, managed in Google Drive)
+*.xlsx
+*.docx
+*.pptx
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
