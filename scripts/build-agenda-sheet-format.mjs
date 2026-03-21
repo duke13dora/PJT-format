@@ -3,10 +3,15 @@
 //
 // Usage: node scripts/build-agenda-sheet-format.mjs
 //
-// ソース:
-//   YP: C:\PJT-YP\drive\50.打ち合わせ関連\【YP様】アジェンダシート.xlsx
-//   TS: C:\PJT-TS\【ダッシュボード】アジェンダシート_2508~2603.xlsx
-// 出力: C:\PJT-format\templates\agenda-sheet-format.xlsx
+// 修正v2:
+// - sheet4 XMLエラー修正（shared formula範囲、dataValidation）
+// - ハイパーリンク全除去
+// - マスタシート追加（yet/ing/done プルダウン用）
+// - ステータスのデータ入力規則（プルダウン）追加
+// - 条件付き書式（色ルール）追加: done=灰色, yet=黄色, ing=ピンク
+// - シート名修正: すり合わせ用メモ（元のまま）
+// - 列幅をYPオリジナルから保持
+// - #列ヘッダーに「#」記号
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -16,7 +21,6 @@ const path = require('path');
 
 const YP_SOURCE =
   'C:/PJT-YP/drive/50.打ち合わせ関連/【YP様】アジェンダシート.xlsx';
-const TS_SOURCE = 'C:/PJT-TS/【ダッシュボード】アジェンダシート_2508~2603.xlsx';
 const scriptDir = path.dirname(
   new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
 );
@@ -36,184 +40,276 @@ function escapeXml(str) {
 }
 
 (async () => {
-  console.log('[1/6] ソースファイル読み込み...');
+  console.log('[1/8] ソースファイル読み込み...');
   const ypData = fs.readFileSync(YP_SOURCE);
   const ypZip = await JSZip.loadAsync(ypData);
 
   // ============================================================
-  // Step 1: sharedStrings に ×××を追加
+  // Step 1: sharedStrings に必要な文字列を追加
   // ============================================================
-  console.log('[2/6] sharedStrings更新...');
+  console.log('[2/8] sharedStrings更新...');
   let ssXml = await ypZip.file('xl/sharedStrings.xml').async('string');
-
-  // 現在のuniqueCount取得
   const ucMatch = ssXml.match(/uniqueCount="(\d+)"/);
   let uniqueCount = parseInt(ucMatch[1]);
 
-  // 追加する文字列と対応インデックス
-  const newStrings = ['×××', '担当', '期限'];
-  const newIndices = {};
-  for (const s of newStrings) {
-    // 既存チェック
-    const siMatches = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
-    let found = -1;
-    for (let i = 0; i < siMatches.length; i++) {
-      const text = siMatches[i].replace(/<[^>]+>/g, '').trim();
-      if (text === s) {
-        found = i;
-        break;
-      }
+  function findOrAddString(text) {
+    const siAll = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
+    for (let i = 0; i < siAll.length; i++) {
+      const t = siAll[i]
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (t === text) return i;
     }
-    if (found >= 0) {
-      newIndices[s] = found;
-    } else {
-      newIndices[s] = uniqueCount;
-      ssXml = ssXml.replace('</sst>', `<si><t>${escapeXml(s)}</t></si></sst>`);
-      uniqueCount++;
-      ssXml = ssXml.replace(
-        /uniqueCount="\d+"/,
-        `uniqueCount="${uniqueCount}"`
-      );
-      ssXml = ssXml.replace(/count="\d+"/, (m) => {
-        const c = parseInt(m.match(/\d+/)[0]);
-        return `count="${c + 1}"`;
-      });
-    }
-  }
-  console.log(
-    `  ×××: index ${newIndices['×××']}, 担当: index ${newIndices['担当']}, 期限: index ${newIndices['期限']}`
-  );
-
-  // 既存の重要インデックスを確認
-  const siAll = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
-  // ステータス用のインデックスを見つける
-  let statusIndices = {};
-  for (let i = 0; i < siAll.length; i++) {
-    const text = siAll[i].replace(/<[^>]+>/g, '').trim();
-    if (text === 'ステータス') statusIndices['ステータス'] = i;
-    if (text === 'yet') statusIndices['yet'] = i;
-  }
-  // yetがなければ追加
-  if (statusIndices['yet'] === undefined) {
-    newIndices['yet'] = uniqueCount;
-    ssXml = ssXml.replace('</sst>', `<si><t>yet</t></si></sst>`);
+    const idx = uniqueCount;
+    ssXml = ssXml.replace('</sst>', `<si><t>${escapeXml(text)}</t></si></sst>`);
     uniqueCount++;
     ssXml = ssXml.replace(/uniqueCount="\d+"/, `uniqueCount="${uniqueCount}"`);
-    ssXml = ssXml.replace(/count="\d+"/, (m) => {
-      const c = parseInt(m.match(/\d+/)[0]);
-      return `count="${c + 1}"`;
-    });
-  } else {
-    newIndices['yet'] = statusIndices['yet'];
+    ssXml = ssXml.replace(
+      /count="\d+"/,
+      (m) => `count="${parseInt(m.match(/\d+/)[0]) + 1}"`
+    );
+    return idx;
   }
 
-  const xxxIdx = newIndices['×××'];
+  const xxxIdx = findOrAddString('×××');
+  const tantouIdx = findOrAddString('担当');
+  const kigenIdx = findOrAddString('期限');
+  const yetIdx = findOrAddString('yet');
+  const ingIdx = findOrAddString('ing');
+  const doneIdx = findOrAddString('done');
+  const statusIdx = findOrAddString('ステータス');
+  const hashIdx = findOrAddString('#');
+  const kihyoubiIdx = findOrAddString('起票日');
+  const kihyoushaIdx = findOrAddString('起票者');
+  const gaiyouIdx = findOrAddString('概要');
+  const shousaiIdx = findOrAddString('詳細');
+  const bikouIdx = findOrAddString('備考');
+
+  console.log(
+    `  ×××=${xxxIdx} 担当=${tantouIdx} 期限=${kigenIdx} yet=${yetIdx} ing=${ingIdx} done=${doneIdx}`
+  );
 
   ypZip.file('xl/sharedStrings.xml', ssXml);
 
   // ============================================================
-  // Step 2: 各シートのデータクリア
+  // Step 2: styles.xml に条件付き書式用のdxfを追加
   // ============================================================
-  console.log('[3/6] 各シートのデータクリア...');
+  console.log('[3/8] 条件付き書式スタイル追加...');
+  let stylesXml = await ypZip.file('xl/styles.xml').async('string');
+
+  // done=灰色(#D8D8D8), yet=黄色(#FEF1CC), ing=ピンク(#FAD9D6), 行done=薄灰(#EFEFEF)
+  const newDxfs = [
+    // dxf0: done (gray) - for status cell
+    '<dxf><fill><patternFill patternType="solid"><fgColor rgb="FFD8D8D8"/><bgColor rgb="FFD8D8D8"/></patternFill></fill></dxf>',
+    // dxf1: yet (yellow) - for status cell
+    '<dxf><fill><patternFill patternType="solid"><fgColor rgb="FFFEF1CC"/><bgColor rgb="FFFEF1CC"/></patternFill></fill></dxf>',
+    // dxf2: ing (pink) - for status cell
+    '<dxf><fill><patternFill patternType="solid"><fgColor rgb="FFFAD9D6"/><bgColor rgb="FFFAD9D6"/></patternFill></fill></dxf>',
+    // dxf3: row done (light gray) - for entire row when done
+    '<dxf><fill><patternFill patternType="solid"><fgColor rgb="FFEFEFEF"/><bgColor rgb="FFEFEFEF"/></patternFill></fill></dxf>',
+  ];
+
+  // Get existing dxf count
+  const dxfCountMatch = stylesXml.match(/<dxfs count="(\d+)"/);
+  let dxfStartIdx;
+  if (dxfCountMatch) {
+    dxfStartIdx = parseInt(dxfCountMatch[1]);
+    stylesXml = stylesXml.replace(
+      /<dxfs count="\d+"/,
+      `<dxfs count="${dxfStartIdx + newDxfs.length}"`
+    );
+    stylesXml = stylesXml.replace('</dxfs>', newDxfs.join('') + '</dxfs>');
+  } else {
+    dxfStartIdx = 0;
+    stylesXml = stylesXml.replace(
+      '</styleSheet>',
+      `<dxfs count="${newDxfs.length}">${newDxfs.join('')}</dxfs></styleSheet>`
+    );
+  }
+
+  const dxfDone = dxfStartIdx;
+  const dxfYet = dxfStartIdx + 1;
+  const dxfIng = dxfStartIdx + 2;
+  const dxfRowDone = dxfStartIdx + 3;
+
+  ypZip.file('xl/styles.xml', stylesXml);
+
+  // ============================================================
+  // Step 3: 各シートのデータクリア + 機能追加
+  // ============================================================
+  console.log('[4/8] 各シートのデータクリア...');
+  const today = Math.floor(
+    (Date.now() - new Date('1899-12-30').getTime()) / 86400000
+  );
 
   // --- Sheet1: アジェンダ ---
-  // Keep row 1 (header) and row 2 (sample → replace with ×××)
-  // Keep rows 3-1000 as empty styled rows
+  // Status column = H, data validation + conditional formatting
   let sheet1 = await ypZip.file('xl/worksheets/sheet1.xml').async('string');
-  sheet1 = clearSheetData(sheet1, 1, {
+  sheet1 = rebuildSheet(sheet1, {
+    headerRow: 1,
     sampleRow: 2,
     keepEmptyRowsUpTo: 1000,
-    xxxIdx,
-    columnsToReplace: ['B', 'C', 'D', 'E', 'F', 'G', 'H'], // A is formula
-    statusColumn: 'H',
-    statusValue: xxxIdx,
+    sampleCells: [
+      { col: 'A', formula: 'row()-row($A$1)', value: '1', style: '5' },
+      { col: 'B', date: today, style: '6' },
+      { col: 'C', ssIdx: xxxIdx, style: '7' },
+      { col: 'D', ssIdx: xxxIdx, style: '7' },
+      { col: 'E', ssIdx: xxxIdx, style: '8' },
+      { col: 'F', ssIdx: xxxIdx, style: '8' },
+      { col: 'G', ssIdx: xxxIdx, style: '9' },
+      { col: 'H', ssIdx: yetIdx, style: '7' },
+    ],
+    statusCol: 'H',
+    statusRange: 'H2:H1000',
+    conditionalFormatRange: 1000,
+    dxfDone,
+    dxfYet,
+    dxfIng,
+    dxfRowDone,
+    dataCols: 'A:H',
   });
   ypZip.file('xl/worksheets/sheet1.xml', sheet1);
 
   // --- Sheet2: 決定事項 ---
   let sheet2 = await ypZip.file('xl/worksheets/sheet2.xml').async('string');
-  sheet2 = clearSheetData(sheet2, 2, {
+  sheet2 = rebuildSheet(sheet2, {
+    headerRow: 1,
     sampleRow: 2,
-    keepEmptyRowsUpTo: 0, // no extra empty rows
-    xxxIdx,
-    columnsToReplace: ['B', 'C', 'D', 'E', 'F'], // A is formula
-    dateColumns: ['B'],
+    keepEmptyRowsUpTo: 0,
+    sampleCells: [
+      { col: 'A', formula: 'row()-row($A$1)', value: '1', style: '21' },
+      { col: 'B', date: today, style: '22' },
+      { col: 'C', ssIdx: xxxIdx, style: '21' },
+      { col: 'D', ssIdx: xxxIdx, style: '21' },
+      { col: 'E', ssIdx: xxxIdx, style: '21' },
+      { col: 'F', ssIdx: xxxIdx, style: '21' },
+    ],
   });
   ypZip.file('xl/worksheets/sheet2.xml', sheet2);
 
-  // --- Sheet3: ネクスト (PJ管理ツール使用版) ---
+  // --- Sheet3: ネクスト（PJ管理ツール使用版）---
   let sheet3 = await ypZip.file('xl/worksheets/sheet3.xml').async('string');
-  sheet3 = clearSheetData(sheet3, 3, {
+  sheet3 = rebuildSheet(sheet3, {
+    headerRow: 1,
     sampleRow: 2,
     keepEmptyRowsUpTo: 0,
-    xxxIdx,
-    columnsToReplace: ['A'], // only A has data
+    sampleCells: [{ col: 'A', ssIdx: xxxIdx, style: '24' }],
   });
   ypZip.file('xl/worksheets/sheet3.xml', sheet3);
 
   // --- Sheet4: 事実一覧 ---
   let sheet4 = await ypZip.file('xl/worksheets/sheet4.xml').async('string');
-  sheet4 = clearSheetData(sheet4, 4, {
+  // Remove YP-specific dataValidation, fix shared formula range
+  sheet4 = rebuildSheet(sheet4, {
+    headerRow: 1,
     sampleRow: 2,
     keepEmptyRowsUpTo: 0,
-    xxxIdx,
-    columnsToReplace: ['B', 'C', 'D', 'E'], // A is formula
-    dateColumns: ['B'],
+    sampleCells: [
+      { col: 'A', formula: 'row()-row($A$1)', value: '1', style: '21' },
+      { col: 'B', date: today, style: '22' },
+      { col: 'C', ssIdx: xxxIdx, style: '21' },
+      { col: 'D', ssIdx: xxxIdx, style: '21' },
+      { col: 'E', ssIdx: xxxIdx, style: '21' },
+    ],
+    removeDataValidation: true,
   });
   ypZip.file('xl/worksheets/sheet4.xml', sheet4);
 
-  // --- Sheet5: すり合わせ用メモ → メモ (空シート、そのまま) ---
-  // No changes needed - already empty
+  // --- Sheet5: すり合わせ用メモ (空シート) ---
+  // No changes needed
 
-  // --- Sheet6: リンク類 ---
+  // --- Sheet6: リンク類 → リンク集 ---
   let sheet6 = await ypZip.file('xl/worksheets/sheet6.xml').async('string');
-  sheet6 = clearSheetData(sheet6, 6, {
+  sheet6 = rebuildSheet(sheet6, {
+    headerRow: 1,
     sampleRow: 2,
     keepEmptyRowsUpTo: 1000,
-    xxxIdx,
-    columnsToReplace: ['B', 'C'], // A is formula
-    dateColumns: ['B'],
+    sampleCells: [
+      { col: 'A', formula: 'row()-row($A$1)', value: '1', style: '5' },
+      { col: 'B', date: today, style: '30' },
+      { col: 'C', ssIdx: xxxIdx, style: '31' },
+    ],
   });
   ypZip.file('xl/worksheets/sheet6.xml', sheet6);
 
   // ============================================================
-  // Step 3: ネクスト（PJ管理ツール不使用）シートを追加
+  // Step 4: ネクスト（PJ管理ツール不使用）シート + マスタシート追加
   // ============================================================
-  console.log('[4/6] ネクスト（PJ管理ツール不使用）シート追加...');
+  console.log('[5/8] 新規シート作成（ネクスト不使用版 + マスタ）...');
 
-  // 既存のステータスインデックスを取得
-  const updatedSs = ssXml;
-  const allSi = updatedSs.match(/<si>[\s\S]*?<\/si>/g) || [];
-  let headerIndices = {};
-  for (let i = 0; i < allSi.length; i++) {
-    const text = allSi[i].replace(/<[^>]+>/g, '').trim();
-    if (
-      ['#', '起票日', '起票者', '概要', '詳細', '備考', 'ステータス'].includes(
-        text
-      )
-    ) {
-      headerIndices[text] = i;
-    }
-  }
-  // #のインデックス（sharedStringsの97番 in YP）
-  // 起票日=0, 起票者=1, 概要=3, 詳細=4, 備考=5, ステータス=6
-
-  // TS-style Next sheet: # / 起票日 / 起票者 / 概要 / 詳細 / 備考 / 担当 / 期限 / ステータス
-  // Use YP's style IDs: header=s2(bold), data=s21(normal text), date=s22
-  const sheet7Xml = createTsNextSheet({
-    headerIndices,
-    xxxIdx,
-    tantouIdx: newIndices['担当'],
-    kigenIdx: newIndices['期限'],
-    yetIdx: newIndices['yet'],
-  });
+  // Sheet7: ネクスト（PJ管理ツール不使用版）
+  // TS sheet3 column widths + structure
+  const sheet7Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="1.0" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/></sheetView></sheetViews>
+<sheetFormatPr customHeight="1" defaultColWidth="14.43" defaultRowHeight="15.0"/>
+<cols><col customWidth="1" min="1" max="1" width="4.63"/><col customWidth="1" min="2" max="3" width="11.09"/><col customWidth="1" min="4" max="4" width="35.27"/><col customWidth="1" min="5" max="6" width="53.09"/><col customWidth="1" min="7" max="7" width="18.73"/><col customWidth="1" min="8" max="9" width="11.09"/></cols>
+<sheetData>
+<row r="1" ht="18.0" customHeight="1">
+<c r="A1" s="2" t="s"><v>${hashIdx}</v></c>
+<c r="B1" s="2" t="s"><v>${kihyoubiIdx}</v></c>
+<c r="C1" s="2" t="s"><v>${kihyoushaIdx}</v></c>
+<c r="D1" s="2" t="s"><v>${gaiyouIdx}</v></c>
+<c r="E1" s="2" t="s"><v>${shousaiIdx}</v></c>
+<c r="F1" s="2" t="s"><v>${bikouIdx}</v></c>
+<c r="G1" s="2" t="s"><v>${tantouIdx}</v></c>
+<c r="H1" s="2" t="s"><v>${kigenIdx}</v></c>
+<c r="I1" s="2" t="s"><v>${statusIdx}</v></c>
+</row>
+<row r="2" ht="15.75" customHeight="1">
+<c r="A2" s="21"><f t="shared" ref="A2:A2" si="0">row()-row($A$1)</f><v>1</v></c>
+<c r="B2" s="22"><v>${today}.0</v></c>
+<c r="C2" s="21" t="s"><v>${xxxIdx}</v></c>
+<c r="D2" s="21" t="s"><v>${xxxIdx}</v></c>
+<c r="E2" s="21" t="s"><v>${xxxIdx}</v></c>
+<c r="F2" s="21" t="s"><v>${xxxIdx}</v></c>
+<c r="G2" s="21" t="s"><v>${xxxIdx}</v></c>
+<c r="H2" s="22"><v>${today}.0</v></c>
+<c r="I2" s="21" t="s"><v>${yetIdx}</v></c>
+</row>
+</sheetData>
+<conditionalFormatting sqref="A2:I1000"><cfRule type="expression" dxfId="${dxfRowDone}" priority="1"><formula>$I2="done"</formula></cfRule></conditionalFormatting>
+<conditionalFormatting sqref="I2:I1000"><cfRule type="cellIs" dxfId="${dxfDone}" priority="2" operator="equal"><formula>"done"</formula></cfRule><cfRule type="cellIs" dxfId="${dxfYet}" priority="3" operator="equal"><formula>"yet"</formula></cfRule><cfRule type="cellIs" dxfId="${dxfIng}" priority="4" operator="equal"><formula>"ing"</formula></cfRule></conditionalFormatting>
+<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="I2:I1000"><formula1>マスタ!$B$2:$B$4</formula1></dataValidation></dataValidations>
+</worksheet>`;
   ypZip.file('xl/worksheets/sheet7.xml', sheet7Xml);
 
-  // ============================================================
-  // Step 4: workbook.xml更新（シート名変更・追加）
-  // ============================================================
-  console.log('[5/6] workbook.xml・rels・ContentTypes更新...');
+  // Sheet8: マスタ
+  const sheet8Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetFormatPr customHeight="1" defaultColWidth="14.43" defaultRowHeight="15.0"/>
+<cols><col customWidth="1" min="1" max="1" width="3.86"/><col customWidth="1" min="2" max="2" width="12.57"/></cols>
+<sheetData>
+<row r="1" ht="18.0" customHeight="1">
+<c r="A1" s="2" t="s"><v>${hashIdx}</v></c>
+<c r="B1" s="2" t="s"><v>${statusIdx}</v></c>
+</row>
+<row r="2"><c r="A2" s="21"><v>1</v></c><c r="B2" s="21" t="s"><v>${yetIdx}</v></c></row>
+<row r="3"><c r="A3" s="21"><v>2</v></c><c r="B3" s="21" t="s"><v>${ingIdx}</v></c></row>
+<row r="4"><c r="A4" s="21"><v>3</v></c><c r="B4" s="21" t="s"><v>${doneIdx}</v></c></row>
+</sheetData>
+</worksheet>`;
+  ypZip.file('xl/worksheets/sheet8.xml', sheet8Xml);
 
+  // ============================================================
+  // Step 5: ハイパーリンク除去（全シートのrels）
+  // ============================================================
+  console.log('[6/8] ハイパーリンク・リレーション除去...');
+  for (let i = 1; i <= 6; i++) {
+    const relsPath = `xl/worksheets/_rels/sheet${i}.xml.rels`;
+    const relsFile = ypZip.file(relsPath);
+    if (relsFile) {
+      let relsXml = await relsFile.async('string');
+      relsXml = relsXml.replace(/<Relationship[^>]*hyperlink[^>]*\/>/g, '');
+      ypZip.file(relsPath, relsXml);
+    }
+  }
+
+  // ============================================================
+  // Step 6: workbook.xml更新
+  // ============================================================
+  console.log('[7/8] workbook.xml・rels・ContentTypes更新...');
   let wbXml = await ypZip.file('xl/workbook.xml').async('string');
 
   // シート名変更
@@ -221,54 +317,54 @@ function escapeXml(str) {
     'name="ネクスト"',
     'name="ネクスト（PJ管理ツール使用）"'
   );
-  wbXml = wbXml.replace('name="すり合わせ用メモ"', 'name="メモ"');
   wbXml = wbXml.replace('name="リンク類"', 'name="リンク集"');
+  // すり合わせ用メモはそのまま維持
 
-  // 新しいシートを追加（sheet9の前、つまり事実一覧の後）
-  // 現在: アジェンダ(rId4), 決定事項(rId5), ネクスト(rId6), 事実一覧(rId7), メモ(rId8), リンク集(rId9)
-  // 追加: ネクスト不使用(rId11) をrId6の後に挿入
-  const newSheetTag =
+  // 新シート2つ追加: ネクスト不使用(rId11) + マスタ(rId12)
+  const newSheet7Tag =
     '<sheet state="visible" name="ネクスト（PJ管理ツール不使用）" sheetId="7" r:id="rId11"/>';
+  const newSheet8Tag =
+    '<sheet state="visible" name="マスタ" sheetId="8" r:id="rId12"/>';
+
+  // 事実一覧の前にネクスト不使用を挿入
   wbXml = wbXml.replace(
     /<sheet [^>]*name="事実一覧"[^>]*\/>/,
-    (match) => newSheetTag + match
+    (match) => newSheet7Tag + match
   );
-
-  // definedNames: フィルター範囲をヘッダー+サンプル行に縮小
-  wbXml = wbXml.replace(
-    /('アジェンダ'!\$H\$1:\$H\$)\d+/,
-    '$11000' // keep 1000 for filter range
-  );
+  // </sheets>の前にマスタを追加
+  wbXml = wbXml.replace('</sheets>', newSheet8Tag + '</sheets>');
 
   ypZip.file('xl/workbook.xml', wbXml);
 
-  // workbook.xml.rels に新しいシートのRelationship追加
+  // workbook.xml.rels
   let wbRels = await ypZip.file('xl/_rels/workbook.xml.rels').async('string');
   wbRels = wbRels.replace(
     '</Relationships>',
-    '<Relationship Id="rId11" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet7.xml"/></Relationships>'
+    '<Relationship Id="rId11" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet7.xml"/>' +
+      '<Relationship Id="rId12" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet8.xml"/>' +
+      '</Relationships>'
   );
   ypZip.file('xl/_rels/workbook.xml.rels', wbRels);
 
-  // Content_Types.xml に新しいシートを追加
+  // Content_Types.xml
   let ctXml = await ypZip.file('[Content_Types].xml').async('string');
   ctXml = ctXml.replace(
     '</Types>',
-    '<Override PartName="/xl/worksheets/sheet7.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+    '<Override PartName="/xl/worksheets/sheet7.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet8.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '</Types>'
   );
   ypZip.file('[Content_Types].xml', ctXml);
 
   // ============================================================
-  // Step 5: 保存
+  // Step 7: 保存・検証
   // ============================================================
-  console.log('[6/6] 保存・検証...');
+  console.log('[8/8] 保存・検証...');
   const buf = await ypZip.generateAsync({ type: 'nodebuffer' });
   fs.writeFileSync(OUTPUT, buf);
   console.log(`[完了] ${OUTPUT}`);
 
-  // ============================================================
   // 検証
-  // ============================================================
   const verifyData = fs.readFileSync(OUTPUT);
   const verifyZip = await JSZip.loadAsync(verifyData);
   const vWb = await verifyZip.file('xl/workbook.xml').async('string');
@@ -279,141 +375,116 @@ function escapeXml(str) {
     console.log(`  ${i + 1}. ${name}`);
   });
 
-  // Verify each sheet has rows
-  for (let i = 1; i <= 7; i++) {
-    const sheetFile = `xl/worksheets/sheet${i}.xml`;
-    const file = verifyZip.file(sheetFile);
-    if (file) {
-      const xml = await file.async('string');
+  for (let i = 1; i <= 8; i++) {
+    const f = verifyZip.file(`xl/worksheets/sheet${i}.xml`);
+    if (f) {
+      const xml = await f.async('string');
       const rows = xml.match(/<row /g) || [];
-      console.log(`  sheet${i}.xml: ${rows.length} rows`);
+      const hasCF = xml.includes('conditionalFormatting');
+      const hasDV = xml.includes('dataValidation');
+      console.log(
+        `  sheet${i}: ${rows.length} rows${hasCF ? ' [CF]' : ''}${hasDV ? ' [DV]' : ''}`
+      );
     }
   }
 })();
 
 // ============================================================
-// ヘルパー: シートのデータクリア
+// ヘルパー: シート再構築
 // ============================================================
-function clearSheetData(sheetXml, sheetNum, opts) {
+function rebuildSheet(sheetXml, opts) {
   const {
-    sampleRow,
+    sampleCells,
     keepEmptyRowsUpTo,
-    xxxIdx,
-    columnsToReplace,
-    dateColumns,
-    statusColumn,
-    statusValue,
+    statusCol,
+    statusRange,
+    conditionalFormatRange,
+    dxfDone,
+    dxfYet,
+    dxfIng,
+    dxfRowDone,
+    removeDataValidation,
+    dataCols,
   } = opts;
 
-  // 全行を抽出
+  // ヘッダー行を保持
   const rows = sheetXml.match(/<row [^>]*>[\s\S]*?<\/row>/g) || [];
   if (rows.length === 0) return sheetXml;
-
-  // Row 1 (header) はそのまま保持
   const headerRow = rows[0];
 
-  // Row 2 (sample) のセルデータを×××に置換
-  let sampleRowXml = rows.length > 1 ? rows[1] : '';
-  if (sampleRowXml && columnsToReplace) {
-    for (const col of columnsToReplace) {
-      const cellRef = `${col}${sampleRow}`;
-      // 日付列の場合はそのまま保持（日付シリアル値のまま）
-      if (dateColumns && dateColumns.includes(col)) {
-        // 日付をサンプル値（今日）に
-        const today = Math.floor(
-          (Date.now() - new Date('1899-12-30').getTime()) / 86400000
-        );
-        const cellRegex = new RegExp(
-          `<c r="${cellRef}"[^>]*>([\\s\\S]*?)<\\/c>`
-        );
-        sampleRowXml = sampleRowXml.replace(cellRegex, (match, inner) => {
-          return match.replace(/<v>[^<]*<\/v>/, `<v>${today}.0</v>`);
-        });
-        continue;
+  // サンプル行を構築
+  const sampleRowCells = sampleCells
+    .map((c) => {
+      if (c.formula) {
+        return `<c r="${c.col}2" s="${c.style}"><f t="shared" ref="${c.col}2:${c.col}2" si="0">${c.formula}</f><v>${c.value}</v></c>`;
+      } else if (c.date !== undefined) {
+        return `<c r="${c.col}2" s="${c.style}"><v>${c.date}.0</v></c>`;
+      } else {
+        return `<c r="${c.col}2" s="${c.style}" t="s"><v>${c.ssIdx}</v></c>`;
       }
-      // 文字列セルを×××に
-      const cellRegex = new RegExp(
-        `<c r="${cellRef}"[^>]*>([\\s\\S]*?)<\\/c>|<c r="${cellRef}"[^>]*\\/>`
-      );
-      sampleRowXml = sampleRowXml.replace(cellRegex, (match) => {
-        // スタイルIDを保持
-        const sAttr = match.match(/s="([^"]+)"/)?.[0] || '';
-        return `<c r="${cellRef}" ${sAttr} t="s"><v>${xxxIdx}</v></c>`;
-      });
-    }
-  }
+    })
+    .join('');
+  const sampleRow = `<row r="2" ht="15.75" customHeight="1">${sampleRowCells}</row>`;
 
-  // 残りの行を構築
-  let newRows = [headerRow, sampleRowXml];
-
-  // 空行を保持する場合（Sheet1, Sheet6: 1000行）
+  // 空行を構築
+  let emptyRows = '';
   if (keepEmptyRowsUpTo > 0) {
     for (let r = 2; r < rows.length; r++) {
-      // 行番号を取得
       const rowNum = rows[r].match(/r="(\d+)"/)?.[1];
       if (!rowNum || parseInt(rowNum) > keepEmptyRowsUpTo) break;
+      if (parseInt(rowNum) <= 2) continue; // skip row 2 (replaced by sample)
 
-      // セルのデータをクリア（値を削除、スタイルのみ残す）
+      // 空行: セルのデータ(<v>, <f>, t属性)を削除、スタイルのみ残す
       let cleanedRow = rows[r];
-      // <v>...</v>を削除
       cleanedRow = cleanedRow.replace(/<v>[^<]*<\/v>/g, '');
-      // t="s" や t="shared" を削除（空セルにする）
       cleanedRow = cleanedRow.replace(/ t="[^"]*"/g, '');
-      // <f>...</f> (数式) を削除
       cleanedRow = cleanedRow.replace(/<f[^>]*>[\s\S]*?<\/f>/g, '');
       cleanedRow = cleanedRow.replace(/<f[^>]*\/>/g, '');
-      newRows.push(cleanedRow);
+      emptyRows += cleanedRow + '\n';
     }
   }
 
-  // sheetDataを再構築
-  const sheetDataContent = newRows.filter(Boolean).join('\n');
+  const sheetDataContent = headerRow + '\n' + sampleRow + '\n' + emptyRows;
   sheetXml = sheetXml.replace(
     /<sheetData>[\s\S]*<\/sheetData>/,
     `<sheetData>${sheetDataContent}</sheetData>`
   );
 
+  // ============================================================
+  // 旧要素を全て除去（hyperlinks, autoFilter, 旧conditionalFormatting, 旧dataValidations）
+  // ============================================================
+  sheetXml = sheetXml.replace(/<hyperlinks>[\s\S]*?<\/hyperlinks>/g, '');
+  sheetXml = sheetXml.replace(/<autoFilter[\s\S]*?<\/autoFilter>/g, '');
+  sheetXml = sheetXml.replace(/<autoFilter[^>]*\/>/g, '');
+  sheetXml = sheetXml.replace(
+    /<conditionalFormatting[\s\S]*?<\/conditionalFormatting>/g,
+    ''
+  );
+  sheetXml = sheetXml.replace(
+    /<dataValidations[\s\S]*?<\/dataValidations>/g,
+    ''
+  );
+
+  // ステータスのデータ入力規則 + 条件付き書式を追加
+  // OOXML順序: conditionalFormatting → dataValidations → drawing
+  if (statusCol && statusRange) {
+    const maxRow = conditionalFormatRange || 1000;
+    const cfXml =
+      `<conditionalFormatting sqref="A2:${statusCol}${maxRow}"><cfRule type="expression" dxfId="${dxfRowDone}" priority="1"><formula>$${statusCol}2="done"</formula></cfRule></conditionalFormatting>` +
+      `<conditionalFormatting sqref="${statusCol}2:${statusCol}${maxRow}"><cfRule type="cellIs" dxfId="${dxfDone}" priority="2" operator="equal"><formula>"done"</formula></cfRule><cfRule type="cellIs" dxfId="${dxfYet}" priority="3" operator="equal"><formula>"yet"</formula></cfRule><cfRule type="cellIs" dxfId="${dxfIng}" priority="4" operator="equal"><formula>"ing"</formula></cfRule></conditionalFormatting>`;
+
+    const dvXml = `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${statusRange}"><formula1>マスタ!$B$2:$B$4</formula1></dataValidation></dataValidations>`;
+
+    // drawing要素の前に挿入（drawingがあれば）
+    if (sheetXml.includes('<drawing')) {
+      sheetXml = sheetXml.replace(/<drawing/, cfXml + dvXml + '<drawing');
+    } else {
+      sheetXml = sheetXml.replace(
+        '</worksheet>',
+        cfXml + dvXml + '</worksheet>'
+      );
+    }
+  }
+
   return sheetXml;
-}
-
-// ============================================================
-// ヘルパー: TS方式ネクストシートの作成
-// ============================================================
-function createTsNextSheet(opts) {
-  const { headerIndices, xxxIdx, tantouIdx, kigenIdx, yetIdx } = opts;
-
-  // ヘッダー: # / 起票日 / 起票者 / 概要 / 詳細 / 備考 / 担当 / 期限 / ステータス
-  // YPのスタイルID: ヘッダー=s2(bold), データテキスト=s21, データ日付=s22, 連番数式=s21
-  // Sheet2のスタイルをベースにする
-
-  // #のsharedStringインデックス
-  const hashIdx = headerIndices['#'] || 97; // YPでは97
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheetData>
-<row r="1" spans="1:9">
-<c r="A1" s="2" t="s"><v>${hashIdx}</v></c>
-<c r="B1" s="2" t="s"><v>${headerIndices['起票日'] || 0}</v></c>
-<c r="C1" s="2" t="s"><v>${headerIndices['起票者'] || 1}</v></c>
-<c r="D1" s="2" t="s"><v>${headerIndices['概要'] || 3}</v></c>
-<c r="E1" s="2" t="s"><v>${headerIndices['詳細'] || 4}</v></c>
-<c r="F1" s="2" t="s"><v>${headerIndices['備考'] || 5}</v></c>
-<c r="G1" s="2" t="s"><v>${tantouIdx}</v></c>
-<c r="H1" s="2" t="s"><v>${kigenIdx}</v></c>
-<c r="I1" s="2" t="s"><v>${headerIndices['ステータス'] || 6}</v></c>
-</row>
-<row r="2" spans="1:9">
-<c r="A2" s="21"><v>1</v></c>
-<c r="B2" s="22"><v>${Math.floor((Date.now() - new Date('1899-12-30').getTime()) / 86400000)}.0</v></c>
-<c r="C2" s="21" t="s"><v>${xxxIdx}</v></c>
-<c r="D2" s="21" t="s"><v>${xxxIdx}</v></c>
-<c r="E2" s="21" t="s"><v>${xxxIdx}</v></c>
-<c r="F2" s="21" t="s"><v>${xxxIdx}</v></c>
-<c r="G2" s="21" t="s"><v>${xxxIdx}</v></c>
-<c r="H2" s="22"><v>${Math.floor((Date.now() - new Date('1899-12-30').getTime()) / 86400000)}.0</v></c>
-<c r="I2" s="21" t="s"><v>${yetIdx}</v></c>
-</row>
-</sheetData>
-</worksheet>`;
 }
