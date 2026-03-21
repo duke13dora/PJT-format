@@ -12,6 +12,11 @@ node_modules/
 *.docx
 *.pptx
 
+# Exception: templates/ のフォーマットファイルは追跡する
+!templates/*.xlsx
+!templates/*.docx
+!templates/*.pptx
+
 # OS files
 Thumbs.db
 .DS_Store
