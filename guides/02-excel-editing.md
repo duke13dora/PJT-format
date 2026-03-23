@@ -6,11 +6,13 @@
 
 ## ツール選定（厳守）
 
-| 操作 | 推奨ツール | 禁止ツール | 理由 |
-|------|-----------|-----------|------|
-| **書き込み** | adm-zip XML直接編集 | ExcelJS, xlsx(SheetJS) | 条件付き書式・オートフィルター・数式を破壊する |
-| **読み取り** | exceljs（読み取り専用）or JSZip | — | 読み取り専用なら安全 |
-| **書き込み後の検証** | JSZip | adm-zip | adm-zipは自分の出力を再読み込みすると `No descriptor present` エラー |
+> 全形式（Excel/Word/PowerPoint）の比較は CLAUDE.md「ツール選定（厳守）」を参照。
+
+| 操作                 | 推奨ツール                      | 禁止ツール             | 理由                                                                 |
+| -------------------- | ------------------------------- | ---------------------- | -------------------------------------------------------------------- |
+| **書き込み**         | adm-zip XML直接編集             | ExcelJS, xlsx(SheetJS) | 条件付き書式・オートフィルター・数式を破壊する                       |
+| **読み取り**         | exceljs（読み取り専用）or JSZip | —                      | 読み取り専用なら安全                                                 |
+| **書き込み後の検証** | JSZip                           | adm-zip                | adm-zipは自分の出力を再読み込みすると `No descriptor present` エラー |
 
 ---
 
@@ -69,7 +71,9 @@ import fs from 'fs';
 
 const data = fs.readFileSync('output.xlsx');
 const verifyZip = await JSZip.loadAsync(data);
-const verifySheet = await verifyZip.file('xl/worksheets/sheet1.xml').async('string');
+const verifySheet = await verifyZip
+  .file('xl/worksheets/sheet1.xml')
+  .async('string');
 // 内容を確認
 ```
 
@@ -78,35 +82,42 @@ const verifySheet = await verifyZip.file('xl/worksheets/sheet1.xml').async('stri
 ## 注意事項・教訓
 
 ### 共有数式（shared formula）
+
 - 行を追加した場合、shared formulaの `ref` 属性の範囲を新行まで拡張すること
 - 例: `ref="A49:A61"` → `ref="A49:A71"`（10行追加した場合）
 - 忘れると新行の数式が動作しない
 
 ### ht値・日付値のサフィックス
+
 - ht（行高さ）値には `.0` サフィックスを付ける（例: `ht="15.75"` → 既存と同じ形式で）
 - 日付シリアル値にも `.0` を付ける（例: `46096.0`）
 - 既存行と形式を完全に合わせることが重要
 
 ### 行高さの自動計算
+
 ```
 max(15.75, 推定行数 × 18pt)
 ```
+
 - 日本語文字 = 幅2（半角換算）
 - 英数字 = 幅1
 - 対象列幅（例: 62.63）→ 1行あたり約69半角文字
 
 ### 列・行の非表示は禁止
+
 - `hidden="1"` を使わない → オートフィルターで絞り込む
 - 非表示にすると表示復帰操作がユーザーにとって煩雑
 
 ### adm-zip → JSZip のリレー
+
 - adm-zipで書き込んだファイルをadm-zipで再読みすると `No descriptor present` エラー
 - 修正が必要な場合: JSZipで読み取り → 修正 → adm-zipで再書き込み
 
 ### フォーマット厳守
-- **フォント、罫線、インデント、スタイルは既存エントリと完全一致させる**
-- XML直接編集なら既存要素をコピーして値だけ変更するアプローチが安全
-- スタイルID（s属性）を間違えると見た目が崩れる
+
+> 基本原則: CLAUDE.md「フォーマット厳守原則」参照。
+
+- スタイルID（s属性）を間違えると見た目が崩れる — 既存要素をコピーして値だけ変更するアプローチが安全
 
 ---
 
@@ -128,6 +139,7 @@ s=12 → 日付形式（B列等）
 ExcelのXMLはCRLF（`\r\n`）で改行を表現するが、`extractText()`で抽出したテキストを`escapeXml()`で`\n`→`&#10;`に変換する際、`\r`が残留し`\r&#10;`=改行2重化が発生する。
 
 **対処**: `extractText()`の末尾で必ず以下を実行:
+
 ```javascript
 text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 ```
@@ -135,6 +147,7 @@ text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 ### 備考追記の行間パターン
 
 既存テキストに追記する場合:
+
 - 既存テキスト末尾 + `\n\n` + 新追記（`MM/DD追記：\n・内容`）
 - 余分な空行は厳禁。既存末尾に`\n`があれば`\n`1つで接続
 - 空の備考セル（`s="14"/`）にテキストを追加する場合: `s="13" t="s"` に変更
@@ -142,6 +155,7 @@ text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 ### フリガナ（rPh）処理
 
 ExcelのXMLには日本語テキストにフリガナ（`<rPh>`要素）が含まれることがある:
+
 - **新規テキスト追加時**: rPhは不要（付けなくてよい）
 - **既存テキスト抽出時**: rPh要素を除去してから処理すること（extractTextでrPhが混入するとテキストが二重化する）
 

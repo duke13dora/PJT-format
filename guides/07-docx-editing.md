@@ -63,31 +63,38 @@ fs.writeFileSync('output.docx', buf);
 ## 注意事項
 
 ### numbering.xml の破損
+
 - 番号付きリスト（`w:numPr`）を含む段落を操作する場合、`word/numbering.xml` の整合性に注意
 - 新しいリストを追加する場合は既存のnumIdを再利用するのが安全
 
 ### フォーマット厳守原則
-- **フォント、罫線、インデント、スタイルは既存エントリと完全一致させる**
+
+> 基本原則: CLAUDE.md「フォーマット厳守原則」参照。
+
 - 出席者セクション等、従来書いていないセクションを勝手に追加しない
 - タイトル形式: `YYMMDD_{会議名}`（余計な文言は付けない）
 
 ### 改ページの挿入
 
 会議エントリの区切り等に改ページを入れる場合:
+
 ```xml
 <w:p><w:r><w:br w:type="page"/></w:r></w:p>
 ```
+
 見出し（Heading1等）の直前に挿入する。
 
 ### ハイパーリンクの追加
 
 1. `word/_rels/document.xml.rels` にRelationshipを追加:
+
 ```xml
 <Relationship Id="rIdXX" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
   Target="https://..." TargetMode="External"/>
 ```
 
 2. 本文XMLでハイパーリンクを参照:
+
 ```xml
 <w:hyperlink r:id="rIdXX">
   <w:r>
@@ -118,6 +125,7 @@ docx内のセルやテキストにフリガナ情報（`<w:rPh>` 要素）が含
 ### 箇条書きレベルの構成例
 
 議事メモ等で使用する箇条書きレベルの例:
+
 ```
 ilvl=0: ● 大見出し（numId参照）
 ilvl=1: ○ 中見出し
