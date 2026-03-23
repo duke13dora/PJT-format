@@ -51,6 +51,7 @@ PJT-format/
 │   ├── DECISIONS.md             決定事項ログ
 │   ├── FACTS.md                 確定事実管理
 │   ├── MEETING-FOLLOWUP-HANDOFF.md 定例後ワークフロー
+│   ├── research-plan.md        リサーチ計画＋情報パッケージ（Phase 0用）
 │   ├── proposal-format.md      提案書テンプレート（7セクション構成）
 │   ├── final-report-format.md  最終報告書テンプレート（5章構成）
 │   ├── flux-presentation-template.pptx FLUX汎用PPTXテンプレート（5種レイアウト）
@@ -108,6 +109,7 @@ PJT-format/
 | [DECISIONS.md](templates/DECISIONS.md) | 決定事項ログ | 定例ごとに追記 |
 | [FACTS.md](templates/FACTS.md) | 確定事実管理 | ヒアリング・調査のたびに追記 |
 | [MEETING-FOLLOWUP-HANDOFF.md](templates/MEETING-FOLLOWUP-HANDOFF.md) | 定例後ワークフロー | Claude Codeへの引き継ぎ手順書 |
+| [research-plan.md](templates/research-plan.md) | リサーチ計画＋情報パッケージ（Phase 0用） | 提案前。情報収集→リサーチ→構造化 |
 | [proposal-format.md](templates/proposal-format.md) | 提案書テンプレート（7セクション構成） | 提案時。MD→すり合わせ→PPTX化 |
 | [final-report-format.md](templates/final-report-format.md) | 最終報告書テンプレート（5章構成） | PJ終了時。MD→すり合わせ→PPTX化 |
 | [flux-presentation-template.pptx](templates/flux-presentation-template.pptx) | FLUX汎用PPTXテンプレート（表紙/アジェンダ/扉/テーブル/テキスト） | 最終報告書・キックオフ・提案書等、全PPTX資料のベース |
